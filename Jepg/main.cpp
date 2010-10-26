@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <gl/gl.h>
+#include <gl/glu.h>
 #include "dialog.h"
 #include "io_oper.h"
 #include "BMPproc.h"
@@ -31,9 +32,19 @@ void init() {
 	io_oper* ist = IStreamFromFile(fname);
 	if (CheckBMP(ist)) {
 		int dep;
-		buffer = DecodeBMP(ist, width, height, dep, 3);
+		void * tmp;
+		tmp = DecodeBMP(ist, width, height, dep, 3);
+		if (!tmp) return;
+		buffer = tmp;
 	}
 
+}
+
+int convert(int tmp)
+{
+	int res = 1;
+	while (res < tmp) res *= 2;
+	return res;
 }
 
 int main (int argc, char* args[])
@@ -176,6 +187,21 @@ void InitOpenGL() {
 	glLoadIdentity();
 	glOrtho(0, width, height, 0,  -1, 1);
 
+	int t_width=convert(width), t_height=convert(height);
+	GLubyte* outbuffer=new GLubyte[t_width*t_height*3];
+
+	int ans=gluScaleImage(GL_RGB, width, height, GL_UNSIGNED_BYTE, 
+			buffer, t_width, t_height, GL_UNSIGNED_BYTE, outbuffer);
+	if (ans) exit(-1);
+	delete[] buffer;
+	buffer=outbuffer;
+	
+	for (int i=0; i<100; i++)
+	{
+		int x=outbuffer[i];
+		printf("%d\n", x);
+	}
+
 	glEnable(GL_TEXTURE_2D);
 
 	glGenTextures(1, &tex);
@@ -184,8 +210,8 @@ void InitOpenGL() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D,
 		0,
-		GL_RGBA,
-		width, height,
+		GL_RGB,
+		t_width, t_height,
 		0,
 		GL_RGB,
 		GL_UNSIGNED_BYTE,
