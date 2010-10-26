@@ -168,7 +168,7 @@ void * DecodeBMP(io_oper* st, int &w, int &h, int &dep, int req_comp) {
          psize = (offset - 14 - 24) / 3;
    } else {
       compress = get32le(s);
-      if (compress == 1 || compress == 2) 0;
+      if (compress == 1 || compress == 2) return 0;
       get32le(s); // discard sizeof
       get32le(s); // discard hres
       get32le(s); // discard vres
@@ -224,7 +224,7 @@ void * DecodeBMP(io_oper* st, int &w, int &h, int &dep, int req_comp) {
    else
       target = dep; // if they want monochrome, we'll post-convert
 	  
-   out = (uc *) malloc(target * w * h);
+   out = new uc[target * w * h];//(uc *) malloc(target * w * h);
    if (!out) return 0;
    if (bpp < 16) {
       int z=0;
