@@ -76,7 +76,7 @@ int main (int argc, char* args[])
 	hWnd = CreateWindow( 
 		TEXT("GLSample"), TEXT("OpenGL Sample"), 
 		WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
-		0, 0, width, height,
+		0, 0, width, height+30,
 		NULL, NULL, wc.hInstance, NULL);
 
 	// enable OpenGL for the window
@@ -195,12 +195,6 @@ void InitOpenGL() {
 	if (ans) exit(-1);
 	delete[] buffer;
 	buffer=outbuffer;
-	
-	for (int i=0; i<100; i++)
-	{
-		int x=outbuffer[i];
-		printf("%d\n", x);
-	}
 
 	glEnable(GL_TEXTURE_2D);
 
