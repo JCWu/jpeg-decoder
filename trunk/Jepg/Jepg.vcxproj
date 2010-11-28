@@ -63,6 +63,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="bitstream.cpp" />
     <ClCompile Include="BMPproc.cpp" />
     <ClCompile Include="dialog.cpp" />
     <ClCompile Include="io_oper.cpp" />
@@ -70,6 +71,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bitstream.h" />
     <ClInclude Include="BMPproc.h" />
     <ClInclude Include="dialog.h" />
     <ClInclude Include="io_oper.h" />
