@@ -45,6 +45,7 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -65,12 +66,14 @@
     <ClCompile Include="BMPproc.cpp" />
     <ClCompile Include="dialog.cpp" />
     <ClCompile Include="io_oper.cpp" />
+    <ClCompile Include="jpeg_decoder.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BMPproc.h" />
     <ClInclude Include="dialog.h" />
     <ClInclude Include="io_oper.h" />
+    <ClInclude Include="jpeg_decoder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
