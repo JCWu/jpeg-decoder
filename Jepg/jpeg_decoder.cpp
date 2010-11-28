@@ -45,14 +45,60 @@ const static int zig_order[8][8] = {
 	{35, 36, 48, 49, 57, 58, 62, 63}
 };
 
+struct huffman_node{
+	huffman_node *child[2];
+	unsigned char key;
+};
+
+void init_node(huffman_node* &p_node)
+{
+	p_node=(huffman_node*)malloc(sizeof(huffman_node));
+	memset(p_node, 0, sizeof(huffman_node));
+}
+
 struct huffman_table
 {
 	unsigned char size[16];
 	int count;
-	unsigned code[256];
+	unsigned char code[256];
+	huffman_node* root;
 };
 
 typedef unsigned short qtab[64];
+
+void print_tree(std::string str, huffman_node* t) {
+	if (t->child[0]) {
+		print_tree(str + "0", t->child[0]);
+		print_tree(str + "1", t->child[1]);
+	} else printf("%02x %s\n", t->key, str.c_str());
+}
+
+void huffman_tree(huffman_table &table)
+{
+	init_node(table.root);
+	huffman_node* previos[256];
+	huffman_node* current[256];
+	int i, j, k, count=0, prev_size=1;
+	previos[0]=table.root;
+
+	for (i=0; i<16; i++){
+		for (j=0; j<prev_size; j++){
+			for (k=0; k<2; k++){
+				init_node(previos[j]->child[k]);
+				current[j*2+k]=previos[j]->child[k];
+			}
+		}
+		for (j=0; j<table.size[i]; j++)
+			current[j]->key=table.code[count++];
+		if (count >= table.count) break;
+		for (j=table.size[i], k=0; j<2*prev_size; j++)
+			previos[k++]=current[j];
+
+		prev_size=k;
+	}
+
+	//print_tree("", table.root);
+}
 
 struct comp_info
 {
@@ -119,7 +165,7 @@ static void read_huffman(jpeg* j, io_oper* st) {
 		}
 		for (int i = 0; i < ht.count; ++i)
 			ht.code[i] = get8(st);
-
+		huffman_tree(ht);
 	}
 	st->Seek(end);
 }
