@@ -67,10 +67,14 @@ struct jpeg
 	int w, h;
 	int type;
 
+	int dri;
+
 	comp_info comp[3];
 	qtab qt[3];
 	huffman_table ac_huff[4], dc_huff[4];
 };
+
+
 
 static unsigned char get_section(io_oper* st) {
 	while (get8(st) != 0xff) ;
@@ -159,6 +163,13 @@ static void read_dqt(jpeg* j, io_oper* st) {
 	st->Seek(end);
 }
 
+static void read_dri(jpeg* j, io_oper* st) {
+	printf("<<DRI>>\n");
+	int end = st->Tell(); end += get16be(st);
+	j->dri = get16be(st);
+	st->Seek(end);
+}
+
 void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 	dep = 3;
 	if (!CheckJpeg(st)) return 0;
@@ -178,6 +189,7 @@ void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 			done = true;
 			break; 
 		case 0xdb: read_dqt(j, st); break; // DQT
+		case 0xdd: read_dri(j, st); break; // DRI
 		default: skip_section(st);
 		}
 	}
