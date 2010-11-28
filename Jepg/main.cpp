@@ -8,6 +8,7 @@
 #include "dialog.h"
 #include "io_oper.h"
 #include "BMPproc.h"
+#include "jpeg_decoder.h"
 
 LRESULT CALLBACK 
 	WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -34,6 +35,12 @@ void init() {
 		int dep;
 		void * tmp;
 		tmp = DecodeBMP(ist, width, height, dep, 3);
+		if (!tmp) return;
+		buffer = tmp;
+	} else if (CheckJpeg(ist)) {
+		int dep;
+		void * tmp;
+		tmp = DecodeJpeg(ist, width, height, dep, 3);
 		if (!tmp) return;
 		buffer = tmp;
 	}
