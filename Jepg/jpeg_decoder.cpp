@@ -1,3 +1,4 @@
+#include "bitstream.h"
 #include "jpeg_decoder.h"
 
 __inline void skip(io_oper* st, int count) {
@@ -97,7 +98,7 @@ void huffman_tree(huffman_table &table)
 		prev_size=k;
 	}
 
-	//print_tree("", table.root);
+	print_tree("", table.root);
 }
 
 struct comp_info
@@ -106,6 +107,7 @@ struct comp_info
 	int qt_id;
 	int ac_table;
 	int dc_table;
+	int dc;
 };
 
 struct jpeg
@@ -118,9 +120,8 @@ struct jpeg
 	comp_info comp[3];
 	qtab qt[3];
 	huffman_table ac_huff[4], dc_huff[4];
+	double G[64], covG[64];
 };
-
-
 
 static unsigned char get_section(io_oper* st) {
 	while (get8(st) != 0xff) ;
@@ -157,7 +158,7 @@ static void read_huffman(jpeg* j, io_oper* st) {
 		huffman_table * table_ptr;
 		if (ac) table_ptr = &j->ac_huff[id]; else table_ptr = &j->dc_huff[id];
 		huffman_table &ht = *table_ptr;
-		
+		printf("HT %d %d\n", ac, id);
 		ht.count = 0;
 		for (int i = 0; i < 16; ++i) {
 			ht.size[i] = get8(st);
@@ -216,6 +217,173 @@ static void read_dri(jpeg* j, io_oper* st) {
 	st->Seek(end);
 }
 
+void prepare_idct(jpeg* jpg)
+{
+	double pi=acos(.0)*2, sqr2=sqrt(2.0);
+
+	for (int i=0; i<8; i++)
+	{
+		for (int j=0; j<8; j++)
+		{
+			jpg->G[i*8+j] = cos ( i*pi*(2*j+1)/16 )/2;
+			if ( i==0 ) jpg->G[i*8+j]/=sqr2;
+			jpg->covG[j*8+i]=jpg->G[i*8+j];
+		}
+	}			
+}
+
+void idct_multiply(double* dst, const double* src1, const double* src2)
+{
+	for (int i=0; i<8; i++)
+		for (int j=0; j<8; j++){
+			dst[i*8+j]=0;
+			for (int k=0; k<8; k++)
+				dst[i*8+j] += ( src1[i*8+k]* src2[k*8+j] );	
+		}	
+}
+
+void idct(jpeg* j, double* dst, const double* src)
+{
+	double* store=(double*)malloc(sizeof(double)*64);
+	idct_multiply(store, j->covG, src);
+	idct_multiply(dst, store, j->G);
+	free(store);
+}
+
+unsigned char get_huffman(huffman_node* node, bitstream* bits)
+{
+	if (node->child[0]==0)
+		return node->key;
+	return get_huffman(node->child[getbit(bits)], bits);
+}
+
+int decode_huffman(int len, bitstream *bits)
+{
+	if (len == 0) return 0;
+	int sgn=!getbit(bits), ans = 1;
+	for (int j = 1; j < len; ++j) ans = ans * 2 + (getbit(bits) ^ sgn);
+	if ( sgn ) ans=-ans;
+	return ans;
+}
+
+void read_block(jpeg *j, bitstream *bits, int* block, int comp_id)
+{
+	int key=(int)get_huffman(j->dc_huff[j->comp[comp_id].dc_table].root, bits);
+	int i;
+
+	j->comp[comp_id].dc+=decode_huffman(key, bits);
+	block[0]=j->comp[comp_id].dc;
+
+	for (i=0; i<63;){
+		int val=(int)get_huffman(j->ac_huff[j->comp[comp_id].ac_table].root, bits);
+		int id= val & 15;
+		int num=val >> 4;
+
+		if (id == 0 && num == 0) {
+			while (i < 63) block[++i] = 0;
+			break;
+		}
+
+		while ( num-- && i<62 ) block[ ++i ]=0;
+		block[++i] = decode_huffman(id, bits);
+	}
+	if (i != 63) {
+		printf("error !\n");
+	}
+}
+
+typedef unsigned char array16[3][16][16];
+
+void iqt(jpeg* j, double* dst, int* block, int comp_id)
+{
+	qtab &qt = j->qt[j->comp[comp_id].qt_id];
+	for (int i=0; i<64; i++){
+		int ind=zig_order[i/8][i%8];
+		dst[i] = block[ind] * qt[ind];
+	}
+}
+
+unsigned char check_number(double number) {
+	int t = (int)(number + 128.5);
+	if (t > 255) t = 255;
+	if (t < 0) t = 0;
+	return t;
+}
+
+void read_mcu(jpeg *j, bitstream* bits, array16 buf)
+{	
+	int block[64];
+	double buffer[2][64];
+	double temp[3][16][16];
+	for (int i=0; i<4; i++)
+	{
+		read_block(j, bits, block ,0);
+
+		iqt(j, buffer[0], block, 0);
+		idct(j, buffer[1], buffer[0]);
+		int x_off=i%2*8, y_off=i/2*8;
+		for (int j=0; j<64; j++){
+			temp[0][y_off+j/8][x_off+j%8]=buffer[1][j];
+		}
+	}
+
+	for (int i = 1; i <= 2; ++i) {
+		read_block(j, bits, block, i);
+		iqt(j, buffer[0], block, i);
+		idct(j, buffer[1], buffer[0]);
+
+		for (int j=0; j<64; j++){
+			temp[i][j/8*2][j%8*2]=buffer[1][j];
+			temp[i][j/8*2 + 1][j%8*2]=buffer[1][j];
+			temp[i][j/8*2][j%8*2 + 1]=buffer[1][j];
+			temp[i][j/8*2 + 1][j%8*2 + 1]=buffer[1][j];
+		}
+	}
+
+	for (int i = 0; i < 16; ++i)
+		for (int j = 0; j < 16; ++j) {
+			buf[0][i][j] = check_number(temp[0][i][j] + 1.402 * (temp[2][i][j]));
+			buf[1][i][j] = check_number(temp[0][i][j] -0.34414*(temp[1][i][j]) - 0.71414 * (temp[2][i][j]));
+			buf[2][i][j] = check_number(temp[0][i][j] + 1.772 * (temp[1][i][j]));
+
+			//buf[0][i][j] = buf[1][i][j] = buf[2][i][j] = check_number(temp[0][i][j]);
+		}
+}
+
+void* decode_mcu(jpeg *jp, io_oper* st)
+{
+	bitstream* bits=create_bit_stream(st);	
+	unsigned char* buffer=(unsigned char*) malloc (sizeof(unsigned char)*jp->w*jp->h*3);
+	int mcu_i, mcu_j;
+	array16 buf;
+	static int a;
+
+	if (jp->comp[0].type ==0x22 ){
+		mcu_i = (jp->h+15)/16;
+		mcu_j = (jp->w+15)/16;
+	}
+
+	for (int i=0; i<mcu_i; i++)
+		for (int j=0; j<mcu_j; j++){
+			read_mcu(jp, bits, buf);
+			printf("%d\n", a++);
+			for (int x=0; x<16; x++)
+			{
+				if ( i*16+x<jp->h ){
+					for (int y=0; y<16; y++)
+					{
+						if ( j*16+y < jp->w ){
+							buffer[((i*16+x)*jp->w+j*16+y)*3]=buf[0][x][y];
+							buffer[((i*16+x)*jp->w+j*16+y)*3+1]=buf[1][x][y];
+							buffer[((i*16+x)*jp->w+j*16+y)*3+2]=buf[2][x][y];
+						}
+					}
+				}
+			}
+		}
+	return buffer;
+}
+
 void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 	dep = 3;
 	if (!CheckJpeg(st)) return 0;
@@ -223,6 +391,7 @@ void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 	int done = 0;
 	jpeg * j = (jpeg*) malloc(sizeof(jpeg));
 	memset(j, 0, sizeof(jpeg));
+	prepare_idct(j);
 	while (! done ) {
 		unsigned char sc = get_section(st);
 		switch (sc) {
@@ -231,7 +400,7 @@ void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 		case 0xc4: read_huffman(j, st); break; // huffman table
 		case 0xc8: return 0;
 		case 0xda: // SOS
-			read_sos(j, st); 
+			read_sos(j, st);
 			done = true;
 			break; 
 		case 0xdb: read_dqt(j, st); break; // DQT
@@ -243,7 +412,9 @@ void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 	for (int i = 0; i < 3; ++i) {
 		printf("comp%d : qt = %d ac = %d dc = %d\n", i, j->comp[i].qt_id, j->comp[i].ac_table, j->comp[i].dc_table);
 	}
-
+	void *result = decode_mcu(j, st);
+	w = j->w;
+	h = j->h;
 	free(j);
-	return 0;
+	return result;
 }
