@@ -20,10 +20,9 @@ void release_bis_stream(bitstream* bit) {
 
 int getbit(bitstream * stream) {
 	if (! stream->rem ) {
-		stream->rem = stream->io->Read(&stream->word, 4) * 8;
+		stream->rem = stream->io->Read(&stream->word, 1) * 8 ;
 	}
 	--stream->rem;
-	int res = stream->word & 1;
-	stream->word >>= 1;
+	int res = (stream->word >> stream->rem) & 1;
 	return res;
 }
