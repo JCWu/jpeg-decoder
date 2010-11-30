@@ -345,15 +345,13 @@ void read_mcu(jpeg *j, bitstream* bits, array16 buf)
 			buf[0][i][j] = check_number(temp[0][i][j] + 1.402 * (temp[2][i][j]));
 			buf[1][i][j] = check_number(temp[0][i][j] -0.34414*(temp[1][i][j]) - 0.71414 * (temp[2][i][j]));
 			buf[2][i][j] = check_number(temp[0][i][j] + 1.772 * (temp[1][i][j]));
-
-			//buf[0][i][j] = buf[1][i][j] = buf[2][i][j] = check_number(temp[0][i][j]);
 		}
 }
 
 void* decode_mcu(jpeg *jp, io_oper* st)
 {
 	bitstream* bits=create_bit_stream(st);	
-	unsigned char* buffer=(unsigned char*) malloc (sizeof(unsigned char)*jp->w*jp->h*3);
+	unsigned char* buffer= new unsigned char[jp->w*jp->h*3];
 	int mcu_i, mcu_j;
 	array16 buf;
 	static int a;
@@ -381,6 +379,10 @@ void* decode_mcu(jpeg *jp, io_oper* st)
 				}
 			}
 		}
+
+	//for (int i=0; i< sizeof(unsigned char)*jp->w*jp->h*3; i++){
+	//	printf("%02X ", buffer[i]);
+	//}
 	return buffer;
 }
 

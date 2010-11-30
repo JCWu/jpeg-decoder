@@ -21,6 +21,9 @@ void release_bis_stream(bitstream* bit) {
 int getbit(bitstream * stream) {
 	if (! stream->rem ) {
 		stream->rem = stream->io->Read(&stream->word, 1) * 8 ;
+		if (stream->word == 0xff) {
+			stream->io->Seek(stream->io->Tell() + 1);
+		}
 	}
 	--stream->rem;
 	int res = (stream->word >> stream->rem) & 1;
