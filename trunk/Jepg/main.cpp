@@ -188,6 +188,19 @@ VOID DisableOpenGL( HWND hWnd, HDC hDC, HGLRC hRC )
 	ReleaseDC( hWnd, hDC );
 } 
 
+int restyScaleImage(int iw, int ih, unsigned char *src, int ow, int oh, unsigned char *dst) {
+	for (int i = 0; i < oh; ++i) {
+		for (int j = 0; j < ow; ++j) {
+			int c = i * ih / oh, r = j * iw / ow;
+			dst[0] = src[(c * iw + r) * 3];
+			dst[1] = src[(c * iw + r) * 3 + 1];
+			dst[2] = src[(c * iw + r) * 3 + 2];
+			dst += 3;
+		}
+	}
+	return 0;
+}
+
 void InitOpenGL() {
 	glDisable( GL_DEPTH_TEST );
 	glMatrixMode( GL_PROJECTION );
@@ -197,8 +210,7 @@ void InitOpenGL() {
 	int t_width=convert(width), t_height=convert(height);
 	GLubyte* outbuffer=new GLubyte[t_width*t_height*3];
 
-	int ans=gluScaleImage(GL_RGB, width, height, GL_UNSIGNED_BYTE, 
-			buffer, t_width, t_height, GL_UNSIGNED_BYTE, outbuffer);
+	int ans=restyScaleImage(width, height, (unsigned char*) buffer, t_width, t_height, outbuffer);
 	if (ans) exit(-1);
 	delete[] buffer;
 	buffer=outbuffer;
@@ -227,6 +239,7 @@ void Render() {
 	int right = 1;
 	int bottom = 1;
 
+	glBindTexture(GL_TEXTURE_2D, tex);
 	glBegin(GL_QUADS);
 		glTexCoord2i( left, top );
 		glVertex2d(0, 0);
