@@ -98,7 +98,7 @@ void huffman_tree(huffman_table &table)
 		prev_size=k;
 	}
 
-	print_tree("", table.root);
+	//print_tree("", table.root);
 }
 
 struct comp_info
@@ -108,6 +108,7 @@ struct comp_info
 	int ac_table;
 	int dc_table;
 	int dc;
+	int vw, vh;
 };
 
 struct jpeg
@@ -116,6 +117,7 @@ struct jpeg
 	int type;
 
 	int dri;
+	int mcu_remain;
 
 	comp_info comp[3];
 	qtab qt[3];
@@ -145,11 +147,9 @@ static void read_header(jpeg* j, io_oper* st) {
 		j->comp[id-1].qt_id = get8(st);
 	}
 	st->Seek(end);
-	printf("w=%d h=%d t=%d\n", j->w, j->h, t);
 }
 
 static void read_huffman(jpeg* j, io_oper* st) {
-	printf("<<DHT>>\n");
 	int end = st->Tell(); end += get16be(st);
 	while (st->Tell() < end) {
 		unsigned char state = get8(st);
@@ -158,7 +158,6 @@ static void read_huffman(jpeg* j, io_oper* st) {
 		huffman_table * table_ptr;
 		if (ac) table_ptr = &j->ac_huff[id]; else table_ptr = &j->dc_huff[id];
 		huffman_table &ht = *table_ptr;
-		printf("HT %d %d\n", ac, id);
 		ht.count = 0;
 		for (int i = 0; i < 16; ++i) {
 			ht.size[i] = get8(st);
@@ -172,7 +171,6 @@ static void read_huffman(jpeg* j, io_oper* st) {
 }
 
 static void read_sos(jpeg* j, io_oper* st) {
-	printf("<<SOS>>\n");
 	int end = st->Tell(); end += get16be(st);
 	get8(st);
 	for (int i = 0; i < 3; ++i) {
@@ -185,7 +183,6 @@ static void read_sos(jpeg* j, io_oper* st) {
 }
 
 static void read_dqt(jpeg* j, io_oper* st) {
-	printf("<<DQT>>\n");
 	int end = st->Tell(); end += get16be(st);
 	while (st->Tell() < end) {
 		unsigned char state = get8(st);
@@ -199,19 +196,11 @@ static void read_dqt(jpeg* j, io_oper* st) {
 			for (int i = 0; i < 64; ++i)
 				qt[i] = get8(st);
 		}
-
-		printf("table id: %d\n", id);
-		for (int i = 0; i < 8; ++i) {
-			for (int j = 0; j < 8; ++j)
-				printf("%4d ", qt[zig_order[i][j]]);
-			printf("\n");
-		}
 	}
 	st->Seek(end);
 }
 
 static void read_dri(jpeg* j, io_oper* st) {
-	printf("<<DRI>>\n");
 	int end = st->Tell(); end += get16be(st);
 	j->dri = get16be(st);
 	st->Seek(end);
@@ -287,9 +276,6 @@ void read_block(jpeg *j, bitstream *bits, int* block, int comp_id)
 		while ( num-- && i<62 ) block[ ++i ]=0;
 		block[++i] = decode_huffman(id, bits);
 	}
-	if (i != 63) {
-		printf("error !\n");
-	}
 }
 
 typedef unsigned char array16[3][16][16];
@@ -310,38 +296,32 @@ unsigned char check_number(double number) {
 	return t;
 }
 
-void read_mcu(jpeg *j, bitstream* bits, array16 buf)
+void read_mcu(jpeg *j, bitstream* bits, array16 buf, int mw, int mh)
 {	
 	int block[64];
 	double buffer[2][64];
 	double temp[3][16][16];
-	for (int i=0; i<4; i++)
-	{
-		read_block(j, bits, block ,0);
+	mw /= 8, mh /= 8;
+	for (int k = 0; k < 3; ++k)
+		for (int c_off = 0; c_off < j->comp[k].vh; ++c_off)
+			for (int r_off = 0; r_off < j->comp[k].vw; ++r_off)
+			{
+				read_block(j, bits, block, k);
+				iqt(j, buffer[0], block, k);
+				idct(j, buffer[1], buffer[0]);
+				int cf = c_off * 8;
+				int rf = r_off * 8;
+				int sc = mh - j->comp[k].vh, sr = mw - j->comp[k].vw;
+				for (int p = 0; p < 64; ++p) {
+					for (int dc = 0; dc + j->comp[k].vh <= mh; ++dc)
+						for (int dr = 0; dr + j->comp[k].vw <= mw; ++dr)
+							temp[k][((p/8)<<sc) + cf + dc][((p%8)<<sr) + rf + dr] = buffer[1][p];
+				}
+			}
 
-		iqt(j, buffer[0], block, 0);
-		idct(j, buffer[1], buffer[0]);
-		int x_off=i%2*8, y_off=i/2*8;
-		for (int j=0; j<64; j++){
-			temp[0][y_off+j/8][x_off+j%8]=buffer[1][j];
-		}
-	}
-
-	for (int i = 1; i <= 2; ++i) {
-		read_block(j, bits, block, i);
-		iqt(j, buffer[0], block, i);
-		idct(j, buffer[1], buffer[0]);
-
-		for (int j=0; j<64; j++){
-			temp[i][j/8*2][j%8*2]=buffer[1][j];
-			temp[i][j/8*2 + 1][j%8*2]=buffer[1][j];
-			temp[i][j/8*2][j%8*2 + 1]=buffer[1][j];
-			temp[i][j/8*2 + 1][j%8*2 + 1]=buffer[1][j];
-		}
-	}
-
-	for (int i = 0; i < 16; ++i)
-		for (int j = 0; j < 16; ++j) {
+	mw *=8; mh *=8;
+	for (int i = 0; i < mh; ++i)
+		for (int j = 0; j < mw; ++j) {
 			buf[0][i][j] = check_number(temp[0][i][j] + 1.402 * (temp[2][i][j]));
 			buf[1][i][j] = check_number(temp[0][i][j] -0.34414*(temp[1][i][j]) - 0.71414 * (temp[2][i][j]));
 			buf[2][i][j] = check_number(temp[0][i][j] + 1.772 * (temp[1][i][j]));
@@ -356,33 +336,47 @@ void* decode_mcu(jpeg *jp, io_oper* st)
 	array16 buf;
 	static int a;
 
-	if (jp->comp[0].type ==0x22 ){
-		mcu_i = (jp->h+15)/16;
-		mcu_j = (jp->w+15)/16;
+	if (jp->dri == 0) {
+		jp->mcu_remain = 0x3fffffff;
+	} else {
+		jp->mcu_remain = jp->dri;
 	}
+	
+	int mw=1, mh=1;
+	for (int i = 0; i < 3; ++i) {
+		mh  = std::max(mw, jp->comp[i].vw = jp->comp[i].type & 15);
+		mw  = std::max(mh, jp->comp[i].vh = jp->comp[i].type >> 4);
+	}
+	mw *= 8;
+	mh *= 8;
+	
+	mcu_i = (jp->h+ mh - 1)/mh;
+	mcu_j = (jp->w+ mw - 1)/mw;
 
 	for (int i=0; i<mcu_i; i++)
 		for (int j=0; j<mcu_j; j++){
-			read_mcu(jp, bits, buf);
-			printf("%d\n", a++);
-			for (int x=0; x<16; x++)
+			read_mcu(jp, bits, buf, mw, mh);
+			for (int x=0; x<mh; x++)
 			{
-				if ( i*16+x<jp->h ){
-					for (int y=0; y<16; y++)
+				if ( i*mh+x<jp->h ){
+					for (int y=0; y<mw; y++)
 					{
-						if ( j*16+y < jp->w ){
-							buffer[((i*16+x)*jp->w+j*16+y)*3]=buf[0][x][y];
-							buffer[((i*16+x)*jp->w+j*16+y)*3+1]=buf[1][x][y];
-							buffer[((i*16+x)*jp->w+j*16+y)*3+2]=buf[2][x][y];
+						if ( j*mw+y < jp->w ){
+							buffer[((i*mh+x)*jp->w+j*mw+y)*3]=buf[0][x][y];
+							buffer[((i*mh+x)*jp->w+j*mw+y)*3+1]=buf[1][x][y];
+							buffer[((i*mh+x)*jp->w+j*mw+y)*3+2]=buf[2][x][y];
 						}
 					}
 				}
 			}
+			if ( -- jp->mcu_remain == 0 ) {
+				check_rst(bits);
+				for (int i = 0; i < 3; ++i) {
+					jp->comp[i].dc = 0;
+				}
+				jp->mcu_remain = jp->dri;
+			}
 		}
-
-	//for (int i=0; i< sizeof(unsigned char)*jp->w*jp->h*3; i++){
-	//	printf("%02X ", buffer[i]);
-	//}
 	return buffer;
 }
 
@@ -411,9 +405,6 @@ void * DecodeJpeg(io_oper* st, int &w, int &h, int &dep, int req_comp) {
 		}
 	}
 
-	for (int i = 0; i < 3; ++i) {
-		printf("comp%d : qt = %d ac = %d dc = %d\n", i, j->comp[i].qt_id, j->comp[i].ac_table, j->comp[i].dc_table);
-	}
 	void *result = decode_mcu(j, st);
 	w = j->w;
 	h = j->h;
