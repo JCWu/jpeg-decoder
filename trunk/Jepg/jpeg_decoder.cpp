@@ -334,7 +334,6 @@ void* decode_mcu(jpeg *jp, io_oper* st)
 	unsigned char* buffer= new unsigned char[jp->w*jp->h*3];
 	int mcu_i, mcu_j;
 	array16 buf;
-	static int a;
 
 	if (jp->dri == 0) {
 		jp->mcu_remain = 0x3fffffff;
