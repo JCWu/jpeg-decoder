@@ -171,12 +171,12 @@ static void read_huffman(jpeg* j, io_oper* st) {
 			ht.count += ht.size[i];
 		}
 		for (int i = 0; i < ht.count; ++i)
-			ht.code[i] = get8(st);
+			ht.code[i] = get8(st);//get the value for each node
 		huffman_tree(ht);
 	}
 	st->Seek(end);
 }
-
+//start of scan
 static void read_sos(jpeg* j, io_oper* st) {
 	int end = st->Tell(); end += get16be(st);
 	get8(st);
@@ -188,7 +188,7 @@ static void read_sos(jpeg* j, io_oper* st) {
 	}
 	st->Seek(end);
 }
-
+//the quantization table(in the zig-zag order)
 static void read_dqt(jpeg* j, io_oper* st) {
 	int end = st->Tell(); end += get16be(st);
 	while (st->Tell() < end) {
@@ -212,7 +212,7 @@ static void read_dri(jpeg* j, io_oper* st) {
 	j->dri = get16be(st);
 	st->Seek(end);
 }
-
+//Calculate the matrices for IDCT.
 void prepare_idct(jpeg* jpg)
 {
 	double pi=acos(.0)*2, sqr2=sqrt(2.0);
@@ -227,7 +227,7 @@ void prepare_idct(jpeg* jpg)
 		}
 	}			
 }
-
+//the multiplication of two matrices(8*8)
 void idct_multiply(double* dst, const double* src1, const double* src2)
 {
 	for (int i=0; i<8; i++)
@@ -245,7 +245,7 @@ void idct(jpeg* j, double* dst, const double* src)
 	idct_multiply(dst, store, j->G);
 	free(store);
 }
-
+//get the value of a node via the huffman tree
 unsigned char get_huffman(huffman_node* node, bitstream* bits)
 {
 	if (node->child[0]==0)
@@ -261,19 +261,19 @@ int decode_huffman(int len, bitstream *bits)
 	if ( sgn ) ans=-ans;
 	return ans;
 }
-
+//read a 8*8 block from the file
 void read_block(jpeg *j, bitstream *bits, int* block, int comp_id)
 {
 	int key=(int)get_huffman(j->dc_huff[j->comp[comp_id].dc_table].root, bits);
 	int i;
 
-	j->comp[comp_id].dc+=decode_huffman(key, bits);
+	j->comp[comp_id].dc+=decode_huffman(key, bits);//the dc coefficient of this block
 	block[0]=j->comp[comp_id].dc;
 
-	for (i=0; i<63;){
+	for (i=0; i<63;){//63 ac coefficients 
 		int val=(int)get_huffman(j->ac_huff[j->comp[comp_id].ac_table].root, bits);
 		int id= val & 15;
-		int num=val >> 4;
+		int num=val >> 4;//the value of zeros before this coefficient
 
 		if (id == 0 && num == 0) {
 			while (i < 63) block[++i] = 0;
@@ -288,7 +288,7 @@ void read_block(jpeg *j, bitstream *bits, int* block, int comp_id)
 typedef unsigned char array16[3][16][16];
 
 void iqt(jpeg* j, double* dst, int* block, int comp_id)
-{
+{//inverse quantization, and rearrange the block via the zig-zag order.
 	qtab &qt = j->qt[j->comp[comp_id].qt_id];
 	for (int i=0; i<64; i++){
 		int ind=zig_order[i/8][i%8];
@@ -296,13 +296,16 @@ void iqt(jpeg* j, double* dst, int* block, int comp_id)
 	}
 }
 
-unsigned char check_number(double number) {
+unsigned char check_number(double number) {//check the bound of RGB value.
 	int t = (int)(number + 128.5);
 	if (t > 255) t = 255;
 	if (t < 0) t = 0;
 	return t;
 }
 
+/*read a minimal coded unit. Then convert the color space from YCbCr to RGB.
+ *the answer are restored in the array buf.
+ *mw and mh for the width and height of the unit(in pixels)*/
 void read_mcu(jpeg *j, bitstream* bits, array16 buf, int mw, int mh)
 {	
 	int block[64];
@@ -328,7 +331,7 @@ void read_mcu(jpeg *j, bitstream* bits, array16 buf, int mw, int mh)
 
 	mw *=8; mh *=8;
 	for (int i = 0; i < mh; ++i)
-		for (int j = 0; j < mw; ++j) {
+		for (int j = 0; j < mw; ++j) {//convert YCbCr to RGB
 			buf[0][i][j] = check_number(temp[0][i][j] + 1.402 * (temp[2][i][j]));
 			buf[1][i][j] = check_number(temp[0][i][j] -0.34414*(temp[1][i][j]) - 0.71414 * (temp[2][i][j]));
 			buf[2][i][j] = check_number(temp[0][i][j] + 1.772 * (temp[1][i][j]));
@@ -336,7 +339,7 @@ void read_mcu(jpeg *j, bitstream* bits, array16 buf, int mw, int mh)
 }
 
 void* decode_mcu(jpeg *jp, io_oper* st)
-{
+{//decode each mcu of the image
 	bitstream* bits=create_bit_stream(st);	
 	unsigned char* buffer= new unsigned char[jp->w*jp->h*3];
 	int mcu_i, mcu_j;
