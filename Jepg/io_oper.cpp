@@ -28,10 +28,23 @@ private:
 	unsigned int size;
 };
 
+struct Exception : public std::exception {
+public:
+	Exception(const char* str) : msg(str) {
+	}
+	~Exception() throw(){
+	}
+	const char* what() {
+		return msg.c_str();
+	}
+private:
+	std::string msg;
+};
+
 BufferOper::BufferOper(wstring fname) {
 	HANDLE hFile = CreateFileW(fname.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,0);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		throw std::exception("failed open file.");
+		throw Exception("failed open file.");
 	}
 	size = GetFileSize(hFile, NULL);
 	buf = new unsigned char [ size ];
@@ -41,7 +54,7 @@ BufferOper::BufferOper(wstring fname) {
 		BOOL flag = ReadFile(hFile, buf + s, size - s, &o, NULL);
 		if (!flag) {
 			CloseHandle(hFile);
-			throw std::exception("failed reading file.");
+			throw Exception("failed reading file.");
 		}
 		s += o;
 	}

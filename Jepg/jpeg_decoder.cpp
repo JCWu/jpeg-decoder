@@ -1,5 +1,10 @@
 #include "bitstream.h"
 #include "jpeg_decoder.h"
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+#include <cmath>
+
 //some operations needed in decoding 
 __inline void skip(io_oper* st, int count) {
 	st->Seek(st->Tell() + count);

@@ -1,5 +1,7 @@
 #include "BMPproc.h"
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 /*
 	ºÏ≤‚BMP∏Ò Ω
 */
