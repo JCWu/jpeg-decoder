@@ -5,6 +5,8 @@
 #include <windows.h>
 #include <gl/gl.h>
 #include <gl/glu.h>
+#include <algorithm>
+#include <cmath>
 #include "dialog.h"
 #include "io_oper.h"
 #include "BMPproc.h"
@@ -17,11 +19,13 @@ VOID DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
 
 
 int width, height, window_width, window_height;
+int center_x, center_y;
+double scale=1;
 void* buffer;
 GLuint tex;
 
 void InitOpenGL();
-void Render();
+void Render(double);
 void init() {
 	std::wstring fname;
 	bool ok = GetFileName(fname);
@@ -62,6 +66,7 @@ int main (int argc, char* args[])
 	MSG msg;
 	BOOL bQuit = FALSE;
 	float theta = 0.0f;
+	double scale_disp;
 
 	init();	
 	if (buffer == 0) return 1;
@@ -81,14 +86,21 @@ int main (int argc, char* args[])
 	// create main window
 	hWnd = CreateWindow( 
 		TEXT("GLSample"), TEXT("OpenGL Sample"), 
-		WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE | WS_OVERLAPPEDWINDOW,
+		WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE ,
 		0, 0, 640, 480,
 		NULL, NULL, wc.hInstance, NULL);
+
+	WndProc(hWnd, WM_SIZE, 0, 0);
 
 	// enable OpenGL for the window
 	EnableOpenGL( hWnd, &hDC, &hRC );
 
 	InitOpenGL();
+
+	while (width * scale > window_width || height * scale > window_height) scale *= 0.5;
+	scale_disp=0.1;
+	double last_tick=GetTickCount();
+
 	// program main loop
 	while (!bQuit) 
 	{
@@ -109,7 +121,11 @@ int main (int argc, char* args[])
 		} 
 		else 
 		{
-			Render();
+			int now_tick = GetTickCount();
+			double dt=min(abs(scale-scale_disp), 1e-3*(now_tick-last_tick)*scale);
+			scale_disp+= dt*(scale>scale_disp?1:-1);
+			last_tick = now_tick;
+			Render(scale_disp);
 			SwapBuffers(hDC);
 		}
 	}
@@ -122,10 +138,17 @@ int main (int argc, char* args[])
 
 // Window Procedure
 
+static void save_point(LPARAM lParam, POINT& pt)
+{		
+	pt.x=LOWORD(lParam);
+	pt.y=HIWORD(lParam);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	static short t;
+	static short t = 0;
 	static RECT rect;
+	static POINT pos;
 
 	switch (message) 
 	{
@@ -145,10 +168,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 		return 0;
 
+	case WM_LBUTTONDOWN:
+		save_point(lParam, pos);
+		return 0;
+
+	case WM_MOUSEMOVE:
+		if ( wParam==MK_LBUTTON )
+		{
+			center_x+=(LOWORD(lParam)-pos.x);
+			center_y-=(HIWORD(lParam)-pos.y);
+			save_point(lParam, pos);
+		}
+		return 0;
+
 	case WM_MOUSEWHEEL:
-		t=HIWORD(wParam);
-		window_height=window_height+(int)(window_height*t/120*0.1);
-		window_width=window_width+(int)(window_width*t/120*0.1);
+		t+=HIWORD(wParam);
+		if (t > 100) scale *= 1.2, t = 0;
+		else if (t < 100) scale *= 0.8, t = 0;
+		if ( scale<0.05 ) scale=0.05;
 		return 0;
 
 	case WM_KEYDOWN:
@@ -217,7 +254,6 @@ void InitOpenGL() {
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity();
 	glOrtho(-window_width/2, window_width/2, -window_height/2, window_height/2,  -1, 1);
-	window_width=width; window_height=height;
 
 	int t_width=convert(width), t_height=convert(height);
 	GLubyte* outbuffer=new GLubyte[t_width*t_height*3];
@@ -243,7 +279,7 @@ void InitOpenGL() {
 		buffer);
 }
 
-void Render() {
+void Render(double scale) {
 	glClear( GL_COLOR_BUFFER_BIT );
 	
 	int left = 0;
@@ -254,12 +290,12 @@ void Render() {
 	glBindTexture(GL_TEXTURE_2D, tex);
 	glBegin(GL_QUADS);
 		glTexCoord2i( left, top );
-		glVertex2d(-window_width/2, window_height/2);
+		glVertex2d(center_x-scale*width/2, center_y+scale*height/2);
 		glTexCoord2i( right, top );
-		glVertex2d(window_width/2, window_height/2);
+		glVertex2d(center_x+scale*width/2, center_y+scale*height/2);
 		glTexCoord2i( right, bottom );
-		glVertex2d(window_width/2, -window_height/2);
+		glVertex2d(center_x+scale*width/2, center_y-scale*height/2);
 		glTexCoord2i( left, bottom );
-		glVertex2d(-window_width/2, -window_height/2);
+		glVertex2d(center_x-scale*width/2, center_y-scale*height/2);
 	glEnd();
 }
