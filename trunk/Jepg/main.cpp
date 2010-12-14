@@ -19,7 +19,7 @@ VOID DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
 
 
 int width, height, window_width, window_height;
-int center_x, center_y;
+int center_x=0, center_y=0;
 double scale=1;
 void* buffer;
 GLuint tex;
@@ -98,7 +98,7 @@ int main (int argc, char* args[])
 	InitOpenGL();
 
 	while (width * scale > window_width || height * scale > window_height) scale *= 0.5;
-	scale_disp=0.1;
+	scale_disp=0.05;
 	double last_tick=GetTickCount();
 
 	// program main loop
@@ -122,7 +122,7 @@ int main (int argc, char* args[])
 		else 
 		{
 			int now_tick = GetTickCount();
-			double dis=abs(scale-scale_disp);
+			double dis=fabs(scale-scale_disp);
 			using namespace std;
 			double dt=min(dis, 2e-3*(now_tick-last_tick)*(dis+0.25));
 			scale_disp+= dt*(scale>scale_disp?1:-1);
@@ -151,6 +151,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static short t = 0;
 	static RECT rect;
 	static POINT pos;
+	static bool first = true;
 
 	switch (message) 
 	{
@@ -176,9 +177,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_MOUSEMOVE:
 		if ( wParam==MK_LBUTTON )
-		{
-			center_x+=(LOWORD(lParam)-pos.x);
-			center_y-=(HIWORD(lParam)-pos.y);
+		{	if (first) first = false;
+			else {
+				center_x+=(LOWORD(lParam)-pos.x);
+				center_y-=(HIWORD(lParam)-pos.y);
+			}
 			save_point(lParam, pos);
 		}
 		return 0;
