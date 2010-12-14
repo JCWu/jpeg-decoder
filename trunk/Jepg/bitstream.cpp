@@ -1,4 +1,6 @@
 #include "bitstream.h"
+#include <cstdlib>
+#include <cstring>
 
 struct bitstream 
 {
