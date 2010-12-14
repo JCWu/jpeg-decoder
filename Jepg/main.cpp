@@ -122,7 +122,8 @@ int main (int argc, char* args[])
 		else 
 		{
 			int now_tick = GetTickCount();
-			double dt=min(abs(scale-scale_disp), 1e-3*(now_tick-last_tick)*scale);
+			double dis=abs(scale-scale_disp);
+			double dt=min(dis, 6e-4*(now_tick-last_tick)*(dis+0.25));
 			scale_disp+= dt*(scale>scale_disp?1:-1);
 			last_tick = now_tick;
 			Render(scale_disp);
