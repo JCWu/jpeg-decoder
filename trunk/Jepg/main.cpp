@@ -16,7 +16,7 @@ VOID EnableOpenGL(HWND hWnd, HDC * hDC, HGLRC * hRC);
 VOID DisableOpenGL(HWND hWnd, HDC hDC, HGLRC hRC);
 
 
-int width, height;
+int width, height, window_width, window_height;
 void* buffer;
 GLuint tex;
 
@@ -44,7 +44,6 @@ void init() {
 		if (!tmp) return;
 		buffer = tmp;
 	}
-
 }
 
 int convert(int tmp)
@@ -82,8 +81,8 @@ int main (int argc, char* args[])
 	// create main window
 	hWnd = CreateWindow( 
 		TEXT("GLSample"), TEXT("OpenGL Sample"), 
-		WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
-		0, 0, width, height+30,
+		WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE | WS_OVERLAPPEDWINDOW,
+		0, 0, 640, 480,
 		NULL, NULL, wc.hInstance, NULL);
 
 	// enable OpenGL for the window
@@ -125,9 +124,18 @@ int main (int argc, char* args[])
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	static short t;
+	static RECT rect;
+
 	switch (message) 
 	{
 	case WM_CREATE:
+		return 0;
+
+	case WM_SIZE:
+		GetClientRect(hWnd, &rect);
+		window_width=rect.right-rect.left;
+		window_height=rect.bottom-rect.top;
 		return 0;
 
 	case WM_CLOSE:
@@ -135,6 +143,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return 0;
 
 	case WM_DESTROY:
+		return 0;
+
+	case WM_MOUSEWHEEL:
+		t=HIWORD(wParam);
+		window_height=window_height+(int)(window_height*t/120*0.1);
+		window_width=window_width+(int)(window_width*t/120*0.1);
 		return 0;
 
 	case WM_KEYDOWN:
@@ -151,14 +165,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 }
 
-// Enable OpenGL
-
 VOID EnableOpenGL( HWND hWnd, HDC * hDC, HGLRC * hRC )
 {
 	PIXELFORMATDESCRIPTOR pfd;
 	int iFormat;
 
-	// get the device context (DC)
 	*hDC = GetDC( hWnd );
 
 	// set the pixel format for the DC
@@ -205,7 +216,8 @@ void InitOpenGL() {
 	glDisable( GL_DEPTH_TEST );
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity();
-	glOrtho(0, width, height, 0,  -1, 1);
+	glOrtho(-window_width/2, window_width/2, -window_height/2, window_height/2,  -1, 1);
+	window_width=width; window_height=height;
 
 	int t_width=convert(width), t_height=convert(height);
 	GLubyte* outbuffer=new GLubyte[t_width*t_height*3];
@@ -242,12 +254,12 @@ void Render() {
 	glBindTexture(GL_TEXTURE_2D, tex);
 	glBegin(GL_QUADS);
 		glTexCoord2i( left, top );
-		glVertex2d(0, 0);
+		glVertex2d(-window_width/2, window_height/2);
 		glTexCoord2i( right, top );
-		glVertex2d(width, 0);
+		glVertex2d(window_width/2, window_height/2);
 		glTexCoord2i( right, bottom );
-		glVertex2d(width, height);
+		glVertex2d(window_width/2, -window_height/2);
 		glTexCoord2i( left, bottom );
-		glVertex2d(0, height);
+		glVertex2d(-window_width/2, -window_height/2);
 	glEnd();
 }
