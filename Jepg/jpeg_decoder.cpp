@@ -353,8 +353,8 @@ void* decode_mcu(jpeg *jp, io_oper* st)
 	
 	int mw=1, mh=1;
 	for (int i = 0; i < 3; ++i) {
-		mh  = std::max(mw, jp->comp[i].vw = jp->comp[i].type & 15);
-		mw  = std::max(mh, jp->comp[i].vh = jp->comp[i].type >> 4);
+		mh  = std::max(mh, jp->comp[i].vh = jp->comp[i].type & 15);
+		mw  = std::max(mw, jp->comp[i].vw = jp->comp[i].type >> 4);
 	}
 	mw *= 8;
 	mh *= 8;
