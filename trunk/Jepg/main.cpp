@@ -123,7 +123,8 @@ int main (int argc, char* args[])
 		{
 			int now_tick = GetTickCount();
 			double dis=abs(scale-scale_disp);
-			double dt=std::min(dis, 6e-4*(now_tick-last_tick)*(dis+0.25));
+			using namespace std;
+			double dt=min(dis, 2e-3*(now_tick-last_tick)*(dis+0.25));
 			scale_disp+= dt*(scale>scale_disp?1:-1);
 			last_tick = now_tick;
 			Render(scale_disp);
